@@ -1,11 +1,13 @@
 package com.example.webhd.service;
 
 import com.example.webhd.dto.KitchenToolDTO;
-import com.example.webhd.model.KitchenTool;
-import com.example.webhd.model.ToolComment;
+import com.example.webhd.dto.ToolCreateDTO;
 import com.example.webhd.mapper.KitchenToolMapper;
 import com.example.webhd.mapper.ToolLikeMapper;
+import com.example.webhd.model.KitchenTool;
+import com.example.webhd.model.ToolComment;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
 
 import java.time.format.DateTimeFormatter;
@@ -16,31 +18,27 @@ import java.util.stream.Collectors;
 public class KitchenToolService {
 
     private final KitchenToolMapper kitchenToolMapper;
-    private final ToolLikeMapper toolLikeMapper;  // 注入点赞Mapper
+    private final ToolLikeMapper toolLikeMapper;
     private static final DateTimeFormatter DATE_TIME_FORMATTER =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
-    // 构造器注入
-    public KitchenToolService(KitchenToolMapper kitchenToolMapper, ToolLikeMapper toolLikeMapper) {
+    public KitchenToolService(KitchenToolMapper kitchenToolMapper,
+                              ToolLikeMapper toolLikeMapper) {
         this.kitchenToolMapper = kitchenToolMapper;
         this.toolLikeMapper = toolLikeMapper;
     }
 
     /**
      * 获取所有厨房工具及其评论（带点赞状态）
-     * @param userId 当前登录用户ID（可能为null）
      */
     public List<KitchenToolDTO> getAllToolsWithComments(Integer userId) {
-        // 查询所有工具
         List<KitchenTool> tools = kitchenToolMapper.findAllTools();
         if (CollectionUtils.isEmpty(tools)) {
             return Collections.emptyList();
         }
 
-        // 查询所有评论
         List<ToolComment> allComments = kitchenToolMapper.findAllComments();
 
-        // 按工具ID分组评论
         final Map<Integer, List<ToolComment>> commentsMap;
         if (CollectionUtils.isEmpty(allComments)) {
             commentsMap = Collections.emptyMap();
@@ -49,102 +47,142 @@ public class KitchenToolService {
                     .collect(Collectors.groupingBy(ToolComment::getToolId));
         }
 
-        // 批量获取点赞状态（优化性能，避免循环查询数据库）
         Map<Integer, Boolean> likeStatusMap = getBatchLikeStatus(userId, tools);
 
-        // 组装响应数据
         return tools.stream()
                 .map(tool -> convertToDTO(tool, commentsMap.get(tool.getId()), likeStatusMap))
                 .collect(Collectors.toList());
     }
 
     /**
-     * 获取所有厨房工具及其评论（兼容无参调用）
+     * 获取所有厨房工具（兼容无参调用）
      */
     public List<KitchenToolDTO> getAllToolsWithComments() {
         return getAllToolsWithComments(null);
     }
 
     /**
-     * 根据工具ID获取详情（带点赞状态）
-     * @param id 工具ID
-     * @param userId 当前登录用户ID（可能为null）
+     * 根据工具ID获取详情
      */
     public KitchenToolDTO getToolById(Integer id, Integer userId) {
-        // 查询所有工具
-        List<KitchenTool> tools = kitchenToolMapper.findAllTools();
-        KitchenTool tool = tools.stream()
-                .filter(t -> t.getId().equals(id))
-                .findFirst()
-                .orElse(null);
-
+        KitchenTool tool = kitchenToolMapper.findToolById(id);
         if (tool == null) {
             return null;
         }
 
-        // 查询该工具的评论
         List<ToolComment> comments = kitchenToolMapper.findCommentsByToolId(id);
-
-        // 获取点赞状态
         Map<Integer, Boolean> likeStatusMap = getBatchLikeStatus(userId, Collections.singletonList(tool));
 
         return convertToDTO(tool, comments, likeStatusMap);
     }
 
     /**
-     * 根据工具ID获取详情（兼容无参调用）
+     * 发布新工具
      */
-    public KitchenToolDTO getToolById(Integer id) {
-        return getToolById(id, null);
+    @Transactional(rollbackFor = Exception.class)
+    public KitchenToolDTO createTool(ToolCreateDTO createDTO) {
+        // 1. 创建工具对象
+        KitchenTool tool = new KitchenTool();
+        tool.setName(createDTO.getName());
+        tool.setDescription(createDTO.getDescription());
+        tool.setUse(createDTO.getUse());
+        tool.setCuisine(createDTO.getCuisine());
+        tool.setUsage(createDTO.getUsage());
+        tool.setBuyLink(createDTO.getBuyLink());
+        tool.setImage(createDTO.getImage());
+        tool.setLikes(0);
+
+        // 2. 插入数据库
+        int result = kitchenToolMapper.insertTool(tool);
+
+        if (result <= 0) {
+            throw new RuntimeException("发布失败");
+        }
+
+        // 3. 返回新创建的工具信息
+        Map<Integer, Boolean> emptyLikeMap = new HashMap<>();
+        emptyLikeMap.put(tool.getId(), false);
+
+        return convertToDTO(tool, new ArrayList<>(), emptyLikeMap);
+    }
+
+    /**
+     * 更新工具信息
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public KitchenToolDTO updateTool(Integer id, ToolCreateDTO updateDTO) {
+        // 1. 检查工具是否存在
+        KitchenTool existingTool = kitchenToolMapper.findToolById(id);
+        if (existingTool == null) {
+            throw new RuntimeException("工具不存在");
+        }
+
+        // 2. 更新工具信息
+        KitchenTool tool = new KitchenTool();
+        tool.setId(id);
+        tool.setName(updateDTO.getName());
+        tool.setDescription(updateDTO.getDescription());
+        tool.setUse(updateDTO.getUse());
+        tool.setCuisine(updateDTO.getCuisine());
+        tool.setUsage(updateDTO.getUsage());
+        tool.setBuyLink(updateDTO.getBuyLink());
+        tool.setImage(updateDTO.getImage());
+
+        int result = kitchenToolMapper.updateTool(tool);
+
+        if (result <= 0) {
+            throw new RuntimeException("更新失败");
+        }
+
+        // 3. 返回更新后的工具信息
+        Map<Integer, Boolean> emptyLikeMap = new HashMap<>();
+        emptyLikeMap.put(id, false);
+
+        return convertToDTO(tool, new ArrayList<>(), emptyLikeMap);
+    }
+
+    /**
+     * 删除工具
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public boolean deleteTool(Integer id) {
+        // 1. 检查工具是否存在
+        KitchenTool tool = kitchenToolMapper.findToolById(id);
+        if (tool == null) {
+            throw new RuntimeException("工具不存在");
+        }
+
+        // 2. 删除工具（评论和点赞会通过外键级联删除）
+        int result = kitchenToolMapper.deleteTool(id);
+
+        return result > 0;
     }
 
     /**
      * 批量获取工具的点赞状态
-     * @param userId 当前用户ID
-     * @param tools 工具列表
-     * @return 工具ID -> 是否点赞的映射
      */
     private Map<Integer, Boolean> getBatchLikeStatus(Integer userId, List<KitchenTool> tools) {
         Map<Integer, Boolean> likeStatusMap = new HashMap<>();
 
-        // 初始化所有工具为未点赞
         for (KitchenTool tool : tools) {
             likeStatusMap.put(tool.getId(), false);
         }
 
-        // 如果用户未登录，返回全 false
         if (userId == null || CollectionUtils.isEmpty(tools)) {
             return likeStatusMap;
         }
 
-        // 获取所有工具ID
         List<Integer> toolIds = tools.stream()
                 .map(KitchenTool::getId)
                 .collect(Collectors.toList());
 
-        // 批量查询用户点赞的工具ID
         Set<Integer> likedToolIds = toolLikeMapper.getLikedToolIds(userId, toolIds);
 
-        // 更新点赞状态
         for (Integer toolId : likedToolIds) {
             likeStatusMap.put(toolId, true);
         }
 
         return likeStatusMap;
-    }
-
-    /**
-     * 获取单个工具的点赞状态
-     * @param toolId 工具ID
-     * @param userId 当前用户ID
-     * @return 是否点赞
-     */
-    public boolean getLikeStatus(Integer toolId, Integer userId) {
-        if (userId == null) {
-            return false;
-        }
-        int count = toolLikeMapper.checkLike(toolId, userId);
-        return count > 0;
     }
 
     /**
@@ -162,11 +200,8 @@ public class KitchenToolService {
         dto.setBuyLink(tool.getBuyLink());
         dto.setImage(tool.getImage());
         dto.setLikes(tool.getLikes());
-
-        // 设置点赞状态（新增字段）
         dto.setLiked(likeStatusMap.getOrDefault(tool.getId(), false));
 
-        // 转换评论
         if (!CollectionUtils.isEmpty(comments)) {
             List<KitchenToolDTO.CommentDTO> commentDTOs = comments.stream()
                     .map(this::convertToCommentDTO)
@@ -189,7 +224,6 @@ public class KitchenToolService {
         commentDTO.setAvatar(comment.getAvatar());
         commentDTO.setContent(comment.getContent());
 
-        // 格式化时间
         if (comment.getTime() != null) {
             commentDTO.setTime(comment.getTime().format(DATE_TIME_FORMATTER));
         }

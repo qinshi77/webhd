@@ -55,4 +55,43 @@ public interface KitchenToolMapper {
      */
     @Update("UPDATE kitchen_tools SET likes = likes - 1 WHERE id = #{toolId} AND likes > 0")
     int decrementLikeCount(@Param("toolId") Integer toolId);
+
+    /**
+     * 新增厨房工具
+     */
+    @Insert("INSERT INTO kitchen_tools (name, description, `use`, cuisine, `usage`, " +
+            "buy_link, image, likes, created_at, updated_at) " +
+            "VALUES (#{name}, #{description}, #{use}, #{cuisine}, #{usage}, " +
+            "#{buyLink}, #{image}, 0, NOW(), NOW())")
+    @Options(useGeneratedKeys = true, keyProperty = "id")
+    int insertTool(KitchenTool tool);
+
+    /**
+     * 更新厨房工具
+     */
+    @Update("UPDATE kitchen_tools SET " +
+            "name = #{name}, " +
+            "description = #{description}, " +
+            "`use` = #{use}, " +
+            "cuisine = #{cuisine}, " +
+            "`usage` = #{usage}, " +
+            "buy_link = #{buyLink}, " +
+            "image = #{image}, " +
+            "updated_at = NOW() " +
+            "WHERE id = #{id}")
+    int updateTool(KitchenTool tool);
+
+    /**
+     * 删除厨房工具
+     */
+    @Delete("DELETE FROM kitchen_tools WHERE id = #{id}")
+    int deleteTool(@Param("id") Integer id);
+
+    /**
+     * 根据ID查询厨房工具
+     */
+    @Select("SELECT id, name, description, `use`, cuisine, `usage`, " +
+            "buy_link as buyLink, image, likes, created_at, updated_at " +
+            "FROM kitchen_tools WHERE id = #{id}")
+    KitchenTool findToolById(@Param("id") Integer id);
 }
