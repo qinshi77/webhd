@@ -80,6 +80,8 @@
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
+            <version>1.18.36</version>  <!-- 支持 JDK 21-23 -->
+            <scope>provided</scope>
         </dependency>
     </dependencies>
     <dependencyManagement>
