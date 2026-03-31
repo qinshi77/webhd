@@ -45,8 +45,8 @@ public class AiController {
                             .fluentPut("role", "user")
                             .fluentPut("content", prompt)
             });
-            body.put("temperature", 0.7f);
-            body.put("max_tokens", 512);
+            body.put("temperature", 0.9f);
+            body.put("max_tokens", 384);
 
             StringEntity entity = new StringEntity(body.toJSONString(), "UTF-8");
             post.setEntity(entity);
@@ -89,8 +89,8 @@ public class AiController {
                             .fluentPut("role", "user")
                             .fluentPut("content", prompt)
             });
-            body.put("temperature", 0.7f);
-            body.put("max_tokens", 1024);
+            body.put("temperature", 0.9f);
+            body.put("max_tokens", 384);
 
             StringEntity entity = new StringEntity(body.toJSONString(), "UTF-8");
             post.setEntity(entity);
