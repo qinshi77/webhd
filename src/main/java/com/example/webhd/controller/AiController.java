@@ -71,7 +71,7 @@ public class AiController {
         }
     }
 
-    // ================== 2. 新增：AI 问答聊天接口（你要的 /chat） ==================
+    // ================== 2. 新增：AI 问答聊天接口 ==================
     @GetMapping("/chat")
     public String aiChat(@RequestParam String prompt) {
         System.out.println("用户提问：" + prompt);
